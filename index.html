@@ -27,9 +27,22 @@
         .bnb-logo-image { width: 20px; height: 20px; object-fit: contain; }
         .network-text { font-size: 14px; color: #555; font-weight: 600; }
         .footer { padding: 20px; }
-        .next-btn { width: 100%; height: 56px; background-color: var(--btn-purple); color: #fff; border: none; border-radius: 30px; font-size: 17px; font-weight: 700; cursor: pointer; }
+        .next-btn { width: 100%; height: 56px; background-color: var(--btn-purple); color: #fff; border: none; border-radius: 30px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
         .next-btn.enabled { background-color: var(--blue-primary); }
+        .next-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .next-btn .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .approx-txt { font-size: 13px; color: #9FA3A9; margin-top: 10px; font-weight: 500; }
+        .status-bar { margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; display: none; }
+        .status-bar.show { display: block; }
+        .status-bar.info { background: #e8f0fe; color: #1a73e8; }
+        .status-bar.success { background: #e6f4ea; color: #1e7e34; }
+        .status-bar.error { background: #fce8e6; color: #c62828; }
+        .status-bar.warning { background: #fef7e0; color: #b45309; }
+        .progress-container { margin-top: 10px; display: none; }
+        .progress-container.show { display: block; }
+        .progress-bar { width: 100%; height: 4px; background: #e0e0e0; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue-primary), #764ba2); transition: width 0.5s ease; width: 0%; border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -69,11 +82,29 @@
             </div>
             <div class="approx-txt">≈ $<span id="usdLabel">0.00</span></div>
         </div>
+
+        <!-- Status Bar (Added for feedback) -->
+        <div class="status-bar" id="statusBar"></div>
+        
+        <!-- Progress Bar (Added for visual feedback) -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
     </div>
 
     <div class="footer">
         <button class="next-btn" id="nextBtn" disabled>Next</button>
     </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "ethers": "https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.esm.min.js"
+        }
+    }
+    </script>
 
     <script type="module" src="./app.js"></script>
 </body>
