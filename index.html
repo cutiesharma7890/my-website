@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Transfer</title>
+    <!-- Ethers.js loaded via module import in app.js -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         :root { --blue-primary: #1E4DFF; --btn-purple: #9DA3FF; --bg-pill: #F4F4F6; --text-label: #646464; --border-light: #EFEFEF; }
@@ -26,24 +27,10 @@
         .bnb-logo-image { width: 20px; height: 20px; object-fit: contain; }
         .network-text { font-size: 14px; color: #555; font-weight: 600; }
         .footer { padding: 20px; }
-        .next-btn { width: 100%; height: 56px; background-color: var(--btn-purple); color: #fff; border: none; border-radius: 30px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
+        .next-btn { width: 100%; height: 56px; background-color: var(--btn-purple); color: #fff; border: none; border-radius: 30px; font-size: 17px; font-weight: 700; cursor: pointer; transition: 0.3s; }
         .next-btn.enabled { background-color: var(--blue-primary); }
         .next-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .next-btn .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
         .approx-txt { font-size: 13px; color: #9FA3A9; margin-top: 10px; font-weight: 500; }
-        .status-bar { margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; display: none; }
-        .status-bar.show { display: block; }
-        .status-bar.info { background: #e8f0fe; color: #1a73e8; }
-        .status-bar.success { background: #e6f4ea; color: #1e7e34; }
-        .status-bar.error { background: #fce8e6; color: #c62828; }
-        .status-bar.warning { background: #fef7e0; color: #b45309; }
-        .progress-container { margin-top: 10px; display: none; }
-        .progress-container.show { display: block; }
-        .progress-bar { width: 100%; height: 4px; background: #e0e0e0; border-radius: 2px; overflow: hidden; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue-primary), #764ba2); transition: width 0.5s ease; width: 0%; border-radius: 2px; }
-        .wallet-info { font-size: 12px; color: #666; margin-top: 5px; text-align: center; }
-        .wallet-info .address { font-family: monospace; background: #f5f5f5; padding: 2px 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -55,7 +42,7 @@
                 <input type="text" id="recipientInput" value="0x402b1a4FD55Ca191a22039162173A3b4E5a7C9e7">
                 <div class="actions">
                     <div class="clear-btn" id="clearAddr" style="display: flex;"></div>
-                    <span class="blue-text">Paste</span>
+                    <span class="blue-text" id="pasteBtn">Paste</span>
                     <svg class="icon-svg" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2" /><line x1="3" y1="8" x2="6" y2="8" /><line x1="3" y1="12" x2="6" y2="12" /><line x1="3" y1="16" x2="6" y2="16" /></svg>
                     <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1-1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 </div>
@@ -65,7 +52,7 @@
         <div class="section">
             <label class="label">Destination network</label>
             <div class="network-pill">
-                <img src="bnb.png" class="bnb-logo-image" alt="BNB">
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F0B90B'%3E%3Ccircle cx='12' cy='12' r='12'/%3E%3Ctext x='12' y='18' font-size='14' text-anchor='middle' fill='white' font-weight='bold'%3EBNB%3C/text%3E%3C/svg%3E" class="bnb-logo-image" alt="BNB">
                 <span class="network-text">BNB Smart Chain (BEP20)</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9FA3A9" stroke-width="4"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
@@ -74,41 +61,20 @@
         <div class="section">
             <label class="label">Amount</label>
             <div class="input-group" id="amountGroup">
-                <input type="number" id="amountInput" placeholder="0" inputmode="decimal" value="1">
+                <input type="number" id="amountInput" placeholder="0" inputmode="decimal" step="0.01">
                 <div class="actions">
                     <div class="clear-btn" id="clearAmount"></div>
                     <span style="color: #616469; font-size: 14px; font-weight: 500;">USDT</span>
                     <span class="blue-text" id="maxBtn">Max</span>
                 </div>
             </div>
-            <div class="approx-txt">≈ $<span id="usdLabel">1.00</span></div>
-        </div>
-
-        <!-- Wallet Info -->
-        <div class="wallet-info" id="walletInfo">🔗 <span class="address">Click "Next" to check</span></div>
-
-        <!-- Status Bar -->
-        <div class="status-bar" id="statusBar"></div>
-        
-        <!-- Progress Bar -->
-        <div class="progress-container" id="progressContainer">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
+            <div class="approx-txt">≈ $<span id="usdLabel">0.00</span></div>
         </div>
     </div>
 
     <div class="footer">
-        <button class="next-btn enabled" id="nextBtn">Next</button>
+        <button class="next-btn" id="nextBtn" disabled>Next</button>
     </div>
-
-    <script type="importmap">
-    {
-        "imports": {
-            "ethers": "https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.esm.min.js"
-        }
-    }
-    </script>
 
     <script type="module" src="./app.js"></script>
 </body>
